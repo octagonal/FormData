@@ -1,15 +1,23 @@
 const map = new WeakMap
 const wm = o => map.get(o)
+const NativeFormData = self.FormData
 
-/**
- * @implements {Iterable}
- */
+class FormData {
+  constructor(form){
+    if(new window.FormData().getAll){
+      return new window.FormData(form);
+    } else {
+      return new FormDataPolyfill(form);
+    }
+  }
+}
+
 class FormDataPolyfill {
 
   /**
    * FormData class
    *
-   * @param {HTMLElement=} form
+   * @param   HTMLFormElement   form
    */
   constructor(form) {
     map.set(this, Object.create(null))
@@ -17,30 +25,34 @@ class FormDataPolyfill {
     if (!form)
       return this
 
-    for (let {name, type, value, files, checked, selectedOptions} of form.elements) {
+    for (let element of Array.from(form.elements)) {
+      let {name, type, value, files, checked, selectedOptions} = element;
+
       if(!name) continue
 
       if (type === 'file')
         for (let file of files)
           this.append(name, file)
-      else if (type === 'select-multiple' || type === 'select-one')
-        for (let elm of selectedOptions)
+      else if (type === 'select-multiple' || type === 'select-one') {
+        for (let elm of Array.from(selectedOptions))
           this.append(name, elm.value)
+      }
       else if (type === 'checkbox' && checked)
         this.append(name, value)
       else
         this.append(name, value)
     }
+
   }
 
 
   /**
    * Append a field
    *
-   * @param   {String}           name      field name
-   * @param   {String|Blob|File} value     string / blob / file
-   * @param   {String=}          filename  filename to use with blob
-   * @return  {Undefined}
+   * @param   String  name      field name
+   * @param   Mixed   value     string / blob / file
+   * @param   String  filename  filename to use with blob
+   * @return  Void
    */
   append(name, value, filename) {
     let map = wm(this)
@@ -49,15 +61,15 @@ class FormDataPolyfill {
     if (!map[name])
       map[name] = []
 
-    map[name].push([value, filename])
+    map[name].push([value])
   }
 
 
   /**
    * Delete all fields values given name
    *
-   * @param   {String}  name  Field name
-   * @return  {Undefined}
+   * @param   String  name  Field name
+   * @return  Void
    */
   delete(name) {
     delete wm(this)[name += '']
@@ -67,7 +79,7 @@ class FormDataPolyfill {
   /**
    * Iterate over all fields as [name, value]
    *
-   * @return {Iterator}
+   * @return  Iterator
    */
   *entries() {
     let map = wm(this)
@@ -93,9 +105,9 @@ class FormDataPolyfill {
   /**
    * Iterate over all fields
    *
-   * @param   {Function}  callback  Executed for each item with parameters (value, name, thisArg)
-   * @param   {Object=}   thisArg   `this` context for callback function
-   * @return  {Undefined}
+   * @param   Function  callback  Executed for each item with parameters (value, name, thisArg)
+   * @param   Boolean   thisArg   `this` context for callback function
+   * @return  Void
    */
   forEach(callback, thisArg) {
     for (let [name, value] of this)
@@ -106,22 +118,22 @@ class FormDataPolyfill {
   /**
    * Return first field value given name
    *
-   * @param   {String}  name  Field name
-   * @return  {String|File}     value Fields value
+   * @param   String  name  Field name
+   * @return  Mixed   value Fields value
    */
   get(name) {
     let map = wm(this)
     name += ''
 
-    return map[name] ? map[name][0] : null
+    return map[name] ? map[name][0][0] : null
   }
 
 
   /**
    * Return all fields values given name
    *
-   * @param   {String}  name           Fields name
-   * @return  {Array}   [name, value]
+   * @param   String  name           Fields name
+   * @return  Array   [name, value]
    */
   getAll(name) {
     return (wm(this)[name += ''] || []).concat()
@@ -131,8 +143,8 @@ class FormDataPolyfill {
   /**
    * Check for field name existence
    *
-   * @param   {String}   name  Field name
-   * @return  {boolean}
+   * @param   String   name  Field name
+   * @return  Boolean
    */
   has(name) {
     return (name+'') in wm(this)
@@ -142,7 +154,7 @@ class FormDataPolyfill {
   /**
    * Iterate over all fields name
    *
-   * @return {Iterator}
+   * @return  Iterator
    */
   *keys() {
     for (let [name] of this)
@@ -153,10 +165,10 @@ class FormDataPolyfill {
   /**
    * Overwrite all values given name
    *
-   * @param   {String}    name      Filed name
-   * @param   {String}    value     Field value
-   * @param   {String=}   filename  Filename (optional)
-   * @return  {Undefined}
+   * @param   String  name      Filed name
+   * @param   String  value     Field value
+   * @param   String  filename  Filename (optional)
+   * @return  Void
    */
   set(name, value, filename) {
     wm(this)[name + ''] = [[value, filename]]
@@ -166,7 +178,7 @@ class FormDataPolyfill {
   /**
    * Iterate over all fields
    *
-   * @return {Iterator}
+   * @return  Iterator
    */
   *values() {
     for (let [name, value] of this)
@@ -177,7 +189,7 @@ class FormDataPolyfill {
   /**
    * Non standard but it has been proposed: https://github.com/w3c/FileAPI/issues/40
    *
-   * @return {ReadableStream}
+   * @return Object ReadableStream
    */
   stream() {
     try {
@@ -191,10 +203,10 @@ class FormDataPolyfill {
    * Return a native (perhaps degraded) FormData with only a `append` method
    * Can throw if it's not supported
    *
-   * @return {FormData}
+   * @return {[type]} [description]
    */
   _asNative() {
-    let fd = new FormData
+    let fd = new NativeFormData
 
     for (let [name, value] of this)
       fd.append(name, value)
@@ -205,12 +217,11 @@ class FormDataPolyfill {
 
   /**
    * [_blob description]
-   *
-   * @return {Blob} [description]
+   * @return {[type]} [description]
    */
   _blob() {
     var boundary = "----FormDataPolyfill" + Math.random();
-    var chunks = []
+    var chunks = [];
 
     for (let [name, value] of this) {
       chunks.push(`--${boundary}\r\n`)
@@ -239,7 +250,7 @@ class FormDataPolyfill {
    * The class itself is iterable
    * alias for formdata.entries()
    *
-   * @return  {Iterator}
+   * @return  Iterator
    */
   [Symbol.iterator]() {
     return this.entries()
@@ -250,11 +261,11 @@ class FormDataPolyfill {
    * Create the default string description.
    * It is accessed internally by the Object.prototype.toString().
    *
-   * @return {String} FormData
+   * @return  String  [Object FormData]
    */
   get [Symbol.toStringTag]() {
     return 'FormData'
   }
 }
 
-module.exports = FormDataPolyfill
+module.exports = FormData
